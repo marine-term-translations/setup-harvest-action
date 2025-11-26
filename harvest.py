@@ -306,11 +306,12 @@ def main():
     """Main execution function."""
     if len(sys.argv) < 2:
         print("Error: Collection URI is required")
-        print("Usage: python harvest.py <collection-uri> [output-path]")
+        print("Usage: python harvest.py <collection-uri>")
         sys.exit(1)
     
     collection_uri = sys.argv[1]
-    output_path = sys.argv[2] if len(sys.argv) > 2 else "harvest.db"
+    # Database path is fixed for standardized usage across all consumers
+    output_path = "translations.db"
     
     print(f"Starting harvest for collection: {collection_uri}")
     print(f"Output database: {output_path}")
