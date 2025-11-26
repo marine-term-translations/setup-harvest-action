@@ -99,3 +99,34 @@ Stores user information:
 ## SPARQL Query
 
 The action queries the NERC SPARQL endpoint at `http://vocab.nerc.ac.uk/sparql/` using SKOS vocabulary properties to retrieve all concepts that belong to the specified collection.
+
+## Versioning
+
+This action uses [semantic versioning](https://semver.org/). You can pin to:
+
+- A major version (e.g., `@v1`) - recommended for most users
+- A specific version (e.g., `@v1.0.0`) - for maximum stability
+- The `main` branch (e.g., `@main`) - for latest development (not recommended for production)
+
+Example:
+```yaml
+# Use latest v1.x.x (recommended)
+- uses: marine-term-translations/setup-harvest-action@v1
+
+# Pin to specific version
+- uses: marine-term-translations/setup-harvest-action@v1.0.0
+```
+
+### Creating a Release
+
+To create a new release:
+
+1. Create and push a semantic version tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. The release workflow will automatically:
+   - Create a GitHub release with auto-generated release notes
+   - Update the major version tag (e.g., `v1`) to point to the new release
