@@ -53,26 +53,51 @@ jobs:
 
 ## Database Schema
 
-The SQLite database contains:
+The SQLite database uses a translation workflow schema with foreign key constraints:
 
-### `concepts` table
-Stores all concepts from the collection with the following columns:
+### `terms` table
+Stores vocabulary terms:
 - `id`: Auto-increment primary key
-- `concept_uri`: Unique URI of the concept
-- `pref_label`: Preferred label (skos:prefLabel)
-- `alt_label`: Alternative label (skos:altLabel)
-- `definition`: Concept definition (skos:definition)
-- `notation`: Concept notation (skos:notation)
-- `broader`: Broader concept URI (skos:broader)
-- `narrower`: Narrower concept URI (skos:narrower)
-- `related`: Related concept URI (skos:related)
+- `uri`: Unique URI of the term
+- `created_at`, `updated_at`: Timestamps
 
-### `collection_metadata` table
-Stores metadata about the harvest:
+### `term_fields` table
+Stores field values for each term:
 - `id`: Auto-increment primary key
-- `collection_uri`: URI of the harvested collection
-- `harvested_at`: Timestamp of the harvest
-- `concept_count`: Number of concepts harvested
+- `term_id`: Foreign key to terms
+- `field_uri`: Full URI of the SKOS property
+- `field_term`: Short form (e.g., `skos:prefLabel`)
+- `original_value`: The original value from SPARQL
+- `created_at`, `updated_at`: Timestamps
+
+### `translations` table
+Stores translations of term fields:
+- `id`: Auto-increment primary key
+- `term_field_id`: Foreign key to term_fields
+- `language`: Language code (`nl`, `fr`, `de`, `es`, `it`, `pt`)
+- `value`: Translated value
+- `status`: `draft`, `review`, `approved`, `rejected`, `merged`
+- `created_by`, `modified_by`, `reviewed_by`: User references
+
+### `appeals` table
+Stores translation appeals:
+- `id`: Auto-increment primary key
+- `translation_id`: Foreign key to translations
+- `opened_by`: User who opened the appeal
+- `status`: `open`, `closed`, `resolved`
+
+### `appeal_messages` table
+Stores messages on appeals:
+- `id`: Auto-increment primary key
+- `appeal_id`: Foreign key to appeals
+- `author`: Message author
+- `message`: Message content
+
+### `users` table
+Stores user information:
+- `username`: Primary key
+- `reputation`: User reputation score
+- `joined_at`: Join timestamp
 
 ## SPARQL Query
 

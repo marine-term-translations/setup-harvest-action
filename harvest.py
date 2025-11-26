@@ -11,6 +11,17 @@ from SPARQLWrapper import SPARQLWrapper, JSON
 
 SPARQL_ENDPOINT = "http://vocab.nerc.ac.uk/sparql/"
 
+# Field mappings: SPARQL variable name -> (field_uri, field_term)
+FIELD_MAPPINGS = {
+    "prefLabel": ("http://www.w3.org/2004/02/skos/core#prefLabel", "skos:prefLabel"),
+    "altLabel": ("http://www.w3.org/2004/02/skos/core#altLabel", "skos:altLabel"),
+    "definition": ("http://www.w3.org/2004/02/skos/core#definition", "skos:definition"),
+    "notation": ("http://www.w3.org/2004/02/skos/core#notation", "skos:notation"),
+    "broader": ("http://www.w3.org/2004/02/skos/core#broader", "skos:broader"),
+    "narrower": ("http://www.w3.org/2004/02/skos/core#narrower", "skos:narrower"),
+    "related": ("http://www.w3.org/2004/02/skos/core#related", "skos:related"),
+}
+
 
 def validate_collection_uri(uri):
     """
@@ -98,7 +109,7 @@ def query_sparql_endpoint(collection_uri):
 
 def create_database(db_path):
     """
-    Create SQLite database schema.
+    Create SQLite database schema for translation workflow.
     
     Args:
         db_path: Path to the database file
@@ -109,30 +120,91 @@ def create_database(db_path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Create concepts table
+    # Enable foreign keys
+    cursor.execute("PRAGMA foreign_keys = ON")
+    
+    # Create terms table
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS concepts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            concept_uri TEXT UNIQUE NOT NULL,
-            pref_label TEXT,
-            alt_label TEXT,
-            definition TEXT,
-            notation TEXT,
-            broader TEXT,
-            narrower TEXT,
-            related TEXT
+        CREATE TABLE IF NOT EXISTS terms (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            uri         TEXT    NOT NULL UNIQUE,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
-    # Create collection metadata table
+    # Create term_fields table
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS collection_metadata (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            collection_uri TEXT UNIQUE NOT NULL,
-            harvested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            concept_count INTEGER
+        CREATE TABLE IF NOT EXISTS term_fields (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            term_id       INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
+            field_uri     TEXT    NOT NULL,
+            field_term    TEXT    NOT NULL,
+            original_value TEXT   NOT NULL,
+            created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(term_id, field_uri, original_value)
         )
     """)
+    
+    # Create translations table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS translations (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            term_field_id  INTEGER NOT NULL REFERENCES term_fields(id) ON DELETE CASCADE,
+            language       TEXT    NOT NULL CHECK(language IN ('nl','fr','de','es','it','pt')),
+            value          TEXT    NOT NULL,
+            status         TEXT    NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'review', 'approved', 'rejected', 'merged')),
+            created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by     TEXT    NOT NULL,
+            modified_at    DATETIME,
+            modified_by    TEXT,
+            reviewed_by    TEXT,
+            UNIQUE(term_field_id, language)
+        )
+    """)
+    
+    # Create appeals table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS appeals (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            translation_id  INTEGER NOT NULL REFERENCES translations(id) ON DELETE CASCADE,
+            opened_by       TEXT    NOT NULL,
+            opened_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+            closed_at       DATETIME,
+            status          TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed', 'resolved')),
+            resolution      TEXT,
+            UNIQUE(translation_id, status)
+        )
+    """)
+    
+    # Create appeal_messages table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS appeal_messages (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            appeal_id   INTEGER NOT NULL REFERENCES appeals(id) ON DELETE CASCADE,
+            author      TEXT    NOT NULL,
+            message     TEXT    NOT NULL,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Create users table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            username    TEXT PRIMARY KEY,
+            reputation  INTEGER DEFAULT 0,
+            joined_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+            extra       TEXT
+        )
+    """)
+    
+    # Create indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_translations_status ON translations(status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_translations_lang ON translations(language)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_appeals_status ON appeals(status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_term_fields_term_id ON term_fields(term_id)")
     
     conn.commit()
     return conn
@@ -151,38 +223,44 @@ def insert_results(conn, collection_uri, results):
     
     bindings = results.get("results", {}).get("bindings", [])
     
-    print(f"Inserting {len(bindings)} results into database...")
+    print(f"Processing {len(bindings)} results...")
     
-    # Prepare batch data for insertion
-    concepts_data = []
+    # Track unique terms and their fields
+    terms_processed = set()
+    term_fields_count = 0
+    
     for binding in bindings:
         concept_uri = binding.get("concept", {}).get("value", "")
-        pref_label = binding.get("prefLabel", {}).get("value", None)
-        alt_label = binding.get("altLabel", {}).get("value", None)
-        definition = binding.get("definition", {}).get("value", None)
-        notation = binding.get("notation", {}).get("value", None)
-        broader = binding.get("broader", {}).get("value", None)
-        narrower = binding.get("narrower", {}).get("value", None)
-        related = binding.get("related", {}).get("value", None)
+        if not concept_uri:
+            continue
         
-        concepts_data.append((concept_uri, pref_label, alt_label, definition, 
-                            notation, broader, narrower, related))
-    
-    # Use executemany for better performance
-    cursor.executemany("""
-        INSERT OR REPLACE INTO concepts 
-        (concept_uri, pref_label, alt_label, definition, notation, broader, narrower, related)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, concepts_data)
-    
-    # Insert collection metadata
-    cursor.execute("""
-        INSERT OR REPLACE INTO collection_metadata (collection_uri, concept_count)
-        VALUES (?, ?)
-    """, (collection_uri, len(bindings)))
+        # Insert term if not already processed
+        if concept_uri not in terms_processed:
+            cursor.execute("""
+                INSERT OR IGNORE INTO terms (uri) VALUES (?)
+            """, (concept_uri,))
+            terms_processed.add(concept_uri)
+        
+        # Get term_id
+        cursor.execute("SELECT id FROM terms WHERE uri = ?", (concept_uri,))
+        term_row = cursor.fetchone()
+        if not term_row:
+            continue
+        term_id = term_row[0]
+        
+        # Insert term fields for each SKOS property
+        for field_name, (field_uri, field_term) in FIELD_MAPPINGS.items():
+            field_value = binding.get(field_name, {}).get("value")
+            if field_value:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO term_fields 
+                    (term_id, field_uri, field_term, original_value)
+                    VALUES (?, ?, ?, ?)
+                """, (term_id, field_uri, field_term, field_value))
+                term_fields_count += 1
     
     conn.commit()
-    print(f"Successfully inserted {len(bindings)} concepts")
+    print(f"Successfully inserted {len(terms_processed)} terms with {term_fields_count} field values")
 
 
 def main():
