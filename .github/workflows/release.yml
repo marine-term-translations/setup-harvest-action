@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: write
@@ -19,6 +19,11 @@ jobs:
         id: semver
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          # Validate semantic version format
+          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Tag '$TAG' does not match semantic versioning format (vX.Y.Z)"
+            exit 1
+          fi
           MAJOR="${TAG%%.*}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
