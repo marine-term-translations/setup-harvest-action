@@ -1,0 +1,28 @@
+name: 'Harvest NERC Vocab Collection'
+description: 'Query a NERC vocab collection from SPARQL endpoint and save to SQLite database'
+author: 'marine-term-translations'
+
+inputs:
+  collection-uri:
+    description: 'URI of the collection to query'
+    required: true
+  output-path:
+    description: 'Path where to save the SQLite database'
+    required: false
+    default: 'harvest.db'
+
+outputs:
+  database-path:
+    description: 'Path to the generated SQLite database'
+    value: ${{ steps.harvest.outputs.database-path }}
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.collection-uri }}
+    - ${{ inputs.output-path }}
+
+branding:
+  icon: 'database'
+  color: 'blue'
