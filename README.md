@@ -34,7 +34,7 @@ jobs:
           collection-uri: ${{ github.event.inputs.collection }}
       
       - name: Upload database
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vocabulary-database
           path: translations.db
