@@ -54,5 +54,26 @@ jobs:
 ## Database Schema
 
 The SQLite database contains:
-- `concepts` table: All concepts with labels, definitions, and relationships
-- `collection_metadata` table: Collection URI and harvest timestamp
+
+### `concepts` table
+Stores all concepts from the collection with the following columns:
+- `id`: Auto-increment primary key
+- `concept_uri`: Unique URI of the concept
+- `pref_label`: Preferred label (skos:prefLabel)
+- `alt_label`: Alternative label (skos:altLabel)
+- `definition`: Concept definition (skos:definition)
+- `notation`: Concept notation (skos:notation)
+- `broader`: Broader concept URI (skos:broader)
+- `narrower`: Narrower concept URI (skos:narrower)
+- `related`: Related concept URI (skos:related)
+
+### `collection_metadata` table
+Stores metadata about the harvest:
+- `id`: Auto-increment primary key
+- `collection_uri`: URI of the harvested collection
+- `harvested_at`: Timestamp of the harvest
+- `concept_count`: Number of concepts harvested
+
+## SPARQL Query
+
+The action queries the NERC SPARQL endpoint at `http://vocab.nerc.ac.uk/sparql/` using SKOS vocabulary properties to retrieve all concepts that belong to the specified collection.
