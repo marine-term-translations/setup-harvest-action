@@ -67,7 +67,7 @@ def create_sparql_query(collection_uri):
     
     SELECT DISTINCT ?concept ?prefLabel ?altLabel ?definition ?notation ?broader ?narrower ?related
     WHERE {{
-        ?concept skos:inScheme <{collection_uri}> .
+        <{collection_uri}> skos:member ?concept .
         OPTIONAL {{ ?concept skos:prefLabel ?prefLabel }}
         OPTIONAL {{ ?concept skos:altLabel ?altLabel }}
         OPTIONAL {{ ?concept skos:definition ?definition }}
