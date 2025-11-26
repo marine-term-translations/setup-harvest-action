@@ -113,15 +113,13 @@ def query_sparql_endpoint(collection_uri, max_retries=3, base_delay=1):
             return results
         except HTTPError as e:
             if e.code == 502 and attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)  # Exponential: 1s, 2s, 4s
+                delay = base_delay * (2 ** attempt)  # Exponential backoff
                 print(f"502 Proxy Error on attempt {attempt + 1}. Retrying in {delay}s...")
                 time.sleep(delay)
                 continue
             raise Exception(f"SPARQL query failed: {str(e)}") from e
         except Exception as e:
             raise Exception(f"SPARQL query failed: {str(e)}") from e
-    
-    raise Exception("SPARQL query failed after all retries")
 
 
 def create_database(db_path):
