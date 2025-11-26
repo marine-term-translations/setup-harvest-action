@@ -51,15 +51,21 @@ def query_sparql_endpoint(collection_uri):
         
     Returns:
         Query results as JSON
+        
+    Raises:
+        Exception: If SPARQL query fails
     """
-    sparql = SPARQLWrapper(SPARQL_ENDPOINT)
-    sparql.setQuery(create_sparql_query(collection_uri))
-    sparql.setReturnFormat(JSON)
-    
-    print(f"Querying SPARQL endpoint for collection: {collection_uri}")
-    results = sparql.query().convert()
-    
-    return results
+    try:
+        sparql = SPARQLWrapper(SPARQL_ENDPOINT)
+        sparql.setQuery(create_sparql_query(collection_uri))
+        sparql.setReturnFormat(JSON)
+        
+        print(f"Querying SPARQL endpoint for collection: {collection_uri}")
+        results = sparql.query().convert()
+        
+        return results
+    except Exception as e:
+        raise Exception(f"SPARQL query failed: {str(e)}") from e
 
 
 def create_database(db_path):
@@ -119,6 +125,8 @@ def insert_results(conn, collection_uri, results):
     
     print(f"Inserting {len(bindings)} results into database...")
     
+    # Prepare batch data for insertion
+    concepts_data = []
     for binding in bindings:
         concept_uri = binding.get("concept", {}).get("value", "")
         pref_label = binding.get("prefLabel", {}).get("value", None)
@@ -129,11 +137,15 @@ def insert_results(conn, collection_uri, results):
         narrower = binding.get("narrower", {}).get("value", None)
         related = binding.get("related", {}).get("value", None)
         
-        cursor.execute("""
-            INSERT OR REPLACE INTO concepts 
-            (concept_uri, pref_label, alt_label, definition, notation, broader, narrower, related)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (concept_uri, pref_label, alt_label, definition, notation, broader, narrower, related))
+        concepts_data.append((concept_uri, pref_label, alt_label, definition, 
+                            notation, broader, narrower, related))
+    
+    # Use executemany for better performance
+    cursor.executemany("""
+        INSERT OR REPLACE INTO concepts 
+        (concept_uri, pref_label, alt_label, definition, notation, broader, narrower, related)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, concepts_data)
     
     # Insert collection metadata
     cursor.execute("""
@@ -178,6 +190,9 @@ def main():
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                 f.write(f"database-path={output_path}\n")
         
+    except sqlite3.Error as e:
+        print(f"Database error during harvest: {e}")
+        sys.exit(1)
     except Exception as e:
         print(f"Error during harvest: {e}")
         sys.exit(1)
