@@ -109,7 +109,10 @@ def query_sparql_endpoint(collection_uri):
 
 def create_database(db_path):
     """
-    Create SQLite database schema for translation workflow.
+    Create or open SQLite database with translation workflow schema.
+    
+    If the database already exists, it will be opened and any missing
+    tables/indexes will be created. Existing data is preserved.
     
     Args:
         db_path: Path to the database file
@@ -117,6 +120,13 @@ def create_database(db_path):
     Returns:
         Database connection
     """
+    db_exists = os.path.exists(db_path)
+    
+    if db_exists:
+        print(f"Opening existing database: {db_path}")
+    else:
+        print(f"Creating new database: {db_path}")
+    
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
@@ -212,7 +222,12 @@ def create_database(db_path):
 
 def insert_results(conn, collection_uri, results):
     """
-    Insert query results into the SQLite database.
+    Insert or update query results into the SQLite database.
+    
+    For existing databases:
+    - Existing terms are updated with new `updated_at` timestamp
+    - New term fields are added, duplicates are ignored
+    - Existing translations, appeals, etc. are preserved
     
     Args:
         conn: Database connection
@@ -225,20 +240,37 @@ def insert_results(conn, collection_uri, results):
     
     print(f"Processing {len(bindings)} results...")
     
-    # Track unique terms and their fields
+    # Track statistics
+    terms_inserted = 0
+    terms_updated = 0
+    term_fields_inserted = 0
+    
+    # Track processed terms to avoid redundant updates
     terms_processed = set()
-    term_fields_count = 0
     
     for binding in bindings:
         concept_uri = binding.get("concept", {}).get("value", "")
         if not concept_uri:
             continue
         
-        # Insert term if not already processed
+        # Check if term already exists
         if concept_uri not in terms_processed:
-            cursor.execute("""
-                INSERT OR IGNORE INTO terms (uri) VALUES (?)
-            """, (concept_uri,))
+            cursor.execute("SELECT id FROM terms WHERE uri = ?", (concept_uri,))
+            existing_term = cursor.fetchone()
+            
+            if existing_term:
+                # Update existing term's updated_at timestamp
+                cursor.execute("""
+                    UPDATE terms SET updated_at = CURRENT_TIMESTAMP WHERE uri = ?
+                """, (concept_uri,))
+                terms_updated += 1
+            else:
+                # Insert new term
+                cursor.execute("""
+                    INSERT INTO terms (uri) VALUES (?)
+                """, (concept_uri,))
+                terms_inserted += 1
+            
             terms_processed.add(concept_uri)
         
         # Get term_id
@@ -252,15 +284,22 @@ def insert_results(conn, collection_uri, results):
         for field_name, (field_uri, field_term) in FIELD_MAPPINGS.items():
             field_value = binding.get(field_name, {}).get("value")
             if field_value:
+                # Try to insert, ignore if duplicate (preserves existing translations)
                 cursor.execute("""
                     INSERT OR IGNORE INTO term_fields 
                     (term_id, field_uri, field_term, original_value)
                     VALUES (?, ?, ?, ?)
                 """, (term_id, field_uri, field_term, field_value))
-                term_fields_count += 1
+                if cursor.rowcount > 0:
+                    term_fields_inserted += 1
     
     conn.commit()
-    print(f"Successfully inserted {len(terms_processed)} terms with {term_fields_count} field values")
+    
+    # Print summary
+    print(f"Harvest summary:")
+    print(f"  - New terms inserted: {terms_inserted}")
+    print(f"  - Existing terms updated: {terms_updated}")
+    print(f"  - New term fields inserted: {term_fields_inserted}")
 
 
 def main():
