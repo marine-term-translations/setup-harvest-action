@@ -458,8 +458,6 @@ def main():
             except subprocess.CalledProcessError as e:
                 print(f"Git operation failed: {e}")
                 sys.exit(1)
-    else:
-        print("Not running in GitHub Actions – skipping git commit/push")
 
     except ValueError as e:
         print(f"Invalid input: {e}")
