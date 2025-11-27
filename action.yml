@@ -1,46 +1,28 @@
-name: 'Harvest NERC Translations'
-description: 'Harvests terms from NERC vocab and updates translations.db'
+# marine-term-translations/setup-harvest-action/action.yml
+name: 'Harvest NERC Vocabulary'
+description: 'Harvests a NERC collection and updates translations.db'
+
 inputs:
-  github-token:
-    description: 'GitHub token for pushing changes'
+  collection-url:
+    description: 'URL of the NERC collection to harvest (e.g. P02, L05, etc.)'
     required: true
-  gitea-token:
-    description: 'Gitea token (if you mirror somewhere)'
-    required: false
-    default: ''
+    default: 'http://vocab.nerc.ac.uk/collection/P02/current/'
+  github-token:
+    description: 'Token to push back to repo'
+    required: true
 
 runs:
   using: "composite"
   steps:
-    - name: Checkout repository (needed for git)
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-
-    - name: Install dependencies
-      run: pip install SPARQLWrapper==2.0.0 rdflib==7.4.0
+    - run: pip install SPARQLWrapper==2.0.0 rdflib==7.4.0
+    - run: python ${{ github.action_path }}/harvest.py "${{ inputs.collection-url }}"
       shell: bash
-
-    - name: Run harvest script
-      run: python ${{ github.action_path }}/harvest.py
-      shell: bash
-
-    - name: Commit & push translations.db if changed
-      run: |
+    - run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add translations.db
-        
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-          exit 0
-        fi
-        
-        git commit -m "chore: update translations.db from NERC vocab [ci skip]"
-        git push origin HEAD:${{ github.ref_name }}
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-      shell: bash
+        git diff --staged --quiet || (git commit -m "chore: update translations.db (${{ inputs.collection-url }})" && git push)
