@@ -45,7 +45,6 @@ jobs:
 
 - `collection-uri` (required): URI of the NERC vocabulary collection to harvest
 - `commit-message` (optional): Custom commit message for the database update (default: `Update translations.db from NERC vocabulary harvest`)
-- `github-token` (optional): GitHub token for pushing changes (defaults to `GITHUB_TOKEN`)
 
 ## Outputs
 
@@ -56,7 +55,7 @@ jobs:
 
 - The workflow must have `contents: write` permission to push changes
 - Your repository's `.gitignore` should not exclude `translations.db` if you want to track it
-- The `actions/checkout@v4` step must be run before this action
+- The `actions/checkout@v4` step must be run before this action (with default `persist-credentials: true` to enable git push)
 
 ## Database Schema
 

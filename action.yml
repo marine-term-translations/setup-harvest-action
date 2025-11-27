@@ -10,10 +10,6 @@ inputs:
     description: 'Commit message for the database update'
     required: false
     default: 'Update translations.db from NERC vocabulary harvest'
-  github-token:
-    description: 'GitHub token for pushing changes (defaults to GITHUB_TOKEN)'
-    required: false
-    default: ${{ github.token }}
 
 outputs:
   database-path:
