@@ -7,6 +7,8 @@ import sys
 import sqlite3
 import os
 import re
+import time
+from urllib.error import HTTPError
 from SPARQLWrapper import SPARQLWrapper, JSON
 
 SPARQL_ENDPOINT = "http://vocab.nerc.ac.uk/sparql/"
@@ -81,30 +83,43 @@ def create_sparql_query(collection_uri):
     return query
 
 
-def query_sparql_endpoint(collection_uri):
+def query_sparql_endpoint(collection_uri, max_retries=3, base_delay=1):
     """
     Query the SPARQL endpoint for collection data.
     
+    Includes retry logic with exponential backoff for transient errors
+    such as HTTP 502 Proxy Errors.
+    
     Args:
         collection_uri: URI of the collection to query
+        max_retries: Maximum number of retry attempts (default: 3)
+        base_delay: Base delay in seconds for exponential backoff (default: 1)
         
     Returns:
         Query results as JSON
         
     Raises:
-        Exception: If SPARQL query fails
+        Exception: If SPARQL query fails after all retries
     """
-    try:
-        sparql = SPARQLWrapper(SPARQL_ENDPOINT)
-        sparql.setQuery(create_sparql_query(collection_uri))
-        sparql.setReturnFormat(JSON)
-        
-        print(f"Querying SPARQL endpoint for collection: {collection_uri}")
-        results = sparql.query().convert()
-        
-        return results
-    except Exception as e:
-        raise Exception(f"SPARQL query failed: {str(e)}") from e
+    sparql = SPARQLWrapper(SPARQL_ENDPOINT)
+    sparql.setQuery(create_sparql_query(collection_uri))
+    sparql.setReturnFormat(JSON)
+    
+    print(f"Querying SPARQL endpoint for collection: {collection_uri}")
+    
+    for attempt in range(max_retries):
+        try:
+            results = sparql.query().convert()
+            return results
+        except HTTPError as e:
+            if e.code == 502 and attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)  # Exponential backoff
+                print(f"502 Proxy Error on attempt {attempt + 1}. Retrying in {delay}s...")
+                time.sleep(delay)
+                continue
+            raise Exception(f"SPARQL query failed: {str(e)}") from e
+        except Exception as e:
+            raise Exception(f"SPARQL query failed: {str(e)}") from e
 
 
 def create_database(db_path):
