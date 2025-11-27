@@ -1,28 +1,48 @@
 # marine-term-translations/setup-harvest-action/action.yml
 name: 'Harvest NERC Vocabulary'
-description: 'Harvests a NERC collection and updates translations.db'
+description: 'Harvests a NERC collection and commits updated translations.db'
 
 inputs:
   collection-url:
-    description: 'URL of the NERC collection to harvest (e.g. P02, L05, etc.)'
+    description: 'NERC collection URL'
     required: true
     default: 'http://vocab.nerc.ac.uk/collection/P02/current/'
-  github-token:
-    description: 'Token to push back to repo'
+  token:
+    description: 'PAT with repo write permission'
     required: true
 
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ inputs.token }}
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-    - run: pip install SPARQLWrapper==2.0.0 rdflib==7.4.0
-    - run: python ${{ github.action_path }}/harvest.py "${{ inputs.collection-url }}"
+
+    - name: Install dependencies
+      run: pip install --no-cache-dir SPARQLWrapper==2.0.0 rdflib==7.4.0
       shell: bash
-    - run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Harvest collection
+      run: python ${{ github.action_path }}/harvest.py "${{ inputs.collection-url }}"
+      shell: bash
+
+    - name: Commit & push if changed
+      run: |
+        git config user.name "gitea-actions[bot]"
+        git config user.email "actions@noreply.users.gitea"
         git add translations.db
-        git diff --staged --quiet || (git commit -m "chore: update translations.db (${{ inputs.collection-url }})" && git push)
+
+        if git diff --staged --quiet; then
+          echo "No changes in translations.db"
+          exit 0
+        fi
+
+        git commit -m "chore: update translations.db – ${{ inputs.collection-url }} [skip ci]"
+        git push
+      shell: bash
