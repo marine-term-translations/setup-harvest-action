@@ -424,44 +424,42 @@ def main():
         # ——— AUTO-COMMIT & PUSH (only in GitHub Actions) ———
         import subprocess
         from pathlib import Path
-    
-        # Only run git commit/push when inside GitHub Actions
-        if "GITHUB_ACTIONS" in os.environ:
-            workspace = Path(os.environ["GITHUB_WORKSPACE"])
-            db_file = workspace / "translations.db"
-    
-            # Safety: ensure we're really in a git repo
-            if not (workspace / ".git").exists():
-                print("Not a git repository – skipping commit")
-            else:
-                print("Committing and pushing updated translations.db ...")
-    
-                try:
-                    # cd into workspace
-                    subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(workspace)], check=True)
-                    subprocess.run(["git", "config", "user.name", "GitHub Actions"], check=True)
-                    subprocess.run(["git", "config", "user.email", "actions@github.com"], check=True)
-    
-                    # Stage the DB
-                    subprocess.run(["git", "add", str(db_file)], check=True)
-    
-                    # Commit only if there are changes
-                    diff = subprocess.run(
-                        ["git", "diff", "--staged", "--quiet"],
-                        capture_output=True
-                    )
-                    if diff.returncode == 0:
-                        print("No changes detected – nothing to commit")
-                    else:
-                        commit_msg = f"chore: harvest update {time.strftime('%Y-%m-%d %H:%M UTC')}"
-                        subprocess.run(["git", "commit", "-m", commit_msg], check=True)
-                        subprocess.run(["git", "push"], check=True)
-                        print(f"Successfully committed and pushed: {commit_msg}")
-                except subprocess.CalledProcessError as e:
-                    print(f"Git operation failed: {e}")
-                    sys.exit(1)
+        
+        workspace = Path(os.environ["GITHUB_WORKSPACE"])
+        db_file = workspace / "translations.db"
+
+        # Safety: ensure we're really in a git repo
+        if not (workspace / ".git").exists():
+            print("Not a git repository – skipping commit")
         else:
-            print("Not running in GitHub Actions – skipping git commit/push")
+            print("Committing and pushing updated translations.db ...")
+
+            try:
+                # cd into workspace
+                subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(workspace)], check=True)
+                subprocess.run(["git", "config", "user.name", "GitHub Actions"], check=True)
+                subprocess.run(["git", "config", "user.email", "actions@github.com"], check=True)
+
+                # Stage the DB
+                subprocess.run(["git", "add", str(db_file)], check=True)
+
+                # Commit only if there are changes
+                diff = subprocess.run(
+                    ["git", "diff", "--staged", "--quiet"],
+                    capture_output=True
+                )
+                if diff.returncode == 0:
+                    print("No changes detected – nothing to commit")
+                else:
+                    commit_msg = f"chore: harvest update {time.strftime('%Y-%m-%d %H:%M UTC')}"
+                    subprocess.run(["git", "commit", "-m", commit_msg], check=True)
+                    subprocess.run(["git", "push"], check=True)
+                    print(f"Successfully committed and pushed: {commit_msg}")
+            except subprocess.CalledProcessError as e:
+                print(f"Git operation failed: {e}")
+                sys.exit(1)
+    else:
+        print("Not running in GitHub Actions – skipping git commit/push")
 
     except ValueError as e:
         print(f"Invalid input: {e}")
