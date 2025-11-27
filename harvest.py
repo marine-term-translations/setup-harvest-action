@@ -421,22 +421,47 @@ def main():
         print(f"Harvest completed successfully!")
         print(f"Database saved to: {output_path}")
 
-        import shutil
+        # ——— AUTO-COMMIT & PUSH (only in GitHub Actions) ———
+        import subprocess
         from pathlib import Path
     
-        # Ensure the database ends up in the GitHub workspace root
-        # so that subsequent steps and `actions/upload-artifact` can see it
-        final_db_path = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "translations.db"
-        if Path(output_path).resolve() != final_db_path.resolve():
-            print(f"Copying database to GitHub workspace: {final_db_path}")
-            shutil.copy2(output_path, final_db_path)
-        else:
-            print(f"Database already in workspace: {final_db_path}")
+        # Only run git commit/push when inside GitHub Actions
+        if "GITHUB_ACTIONS" in os.environ:
+            workspace = Path(os.environ["GITHUB_WORKSPACE"])
+            db_file = workspace / "translations.db"
     
-        # Also set the output variable for other steps/actions
-        if "GITHUB_OUTPUT" in os.environ:
-            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-                f.write(f"database-path={final_db_path}\n")
+            # Safety: ensure we're really in a git repo
+            if not (workspace / ".git").exists():
+                print("Not a git repository – skipping commit")
+            else:
+                print("Committing and pushing updated translations.db ...")
+    
+                try:
+                    # cd into workspace
+                    subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(workspace)], check=True)
+                    subprocess.run(["git", "config", "user.name", "GitHub Actions"], check=True)
+                    subprocess.run(["git", "config", "user.email", "actions@github.com"], check=True)
+    
+                    # Stage the DB
+                    subprocess.run(["git", "add", str(db_file)], check=True)
+    
+                    # Commit only if there are changes
+                    diff = subprocess.run(
+                        ["git", "diff", "--staged", "--quiet"],
+                        capture_output=True
+                    )
+                    if diff.returncode == 0:
+                        print("No changes detected – nothing to commit")
+                    else:
+                        commit_msg = f"chore: harvest update {time.strftime('%Y-%m-%d %H:%M UTC')}"
+                        subprocess.run(["git", "commit", "-m", commit_msg], check=True)
+                        subprocess.run(["git", "push"], check=True)
+                        print(f"Successfully committed and pushed: {commit_msg}")
+                except subprocess.CalledProcessError as e:
+                    print(f"Git operation failed: {e}")
+                    sys.exit(1)
+        else:
+            print("Not running in GitHub Actions – skipping git commit/push")
 
     except ValueError as e:
         print(f"Invalid input: {e}")
