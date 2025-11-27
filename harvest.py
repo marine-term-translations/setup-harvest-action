@@ -421,10 +421,22 @@ def main():
         print(f"Harvest completed successfully!")
         print(f"Database saved to: {output_path}")
 
-        # Set output for GitHub Actions
+        import shutil
+        from pathlib import Path
+    
+        # Ensure the database ends up in the GitHub workspace root
+        # so that subsequent steps and `actions/upload-artifact` can see it
+        final_db_path = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "translations.db"
+        if Path(output_path).resolve() != final_db_path.resolve():
+            print(f"Copying database to GitHub workspace: {final_db_path}")
+            shutil.copy2(output_path, final_db_path)
+        else:
+            print(f"Database already in workspace: {final_db_path}")
+    
+        # Also set the output variable for other steps/actions
         if "GITHUB_OUTPUT" in os.environ:
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-                f.write(f"database-path={output_path}\n")
+                f.write(f"database-path={final_db_path}\n")
 
     except ValueError as e:
         print(f"Invalid input: {e}")
