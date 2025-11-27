@@ -1,25 +1,46 @@
-name: "Harvest NERC Vocabulary"
-description: "Harvests a NERC collection and auto-commits translations.db back to the calling repo"
+name: 'Harvest NERC Translations'
+description: 'Harvests terms from NERC vocab and updates translations.db'
 inputs:
-  collection-uri:
+  github-token:
+    description: 'GitHub token for pushing changes'
     required: true
-    description: "e.g. http://vocab.nerc.ac.uk/collection/P02/current/"
+  gitea-token:
+    description: 'Gitea token (if you mirror somewhere)'
+    required: false
+    default: ''
+
 runs:
   using: "composite"
   steps:
+    - name: Checkout repository (needed for git)
+      uses: actions/checkout@v4
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: Install SPARQLWrapper
-      run: pip install SPARQLWrapper
+    - name: Install dependencies
+      run: pip install SPARQLWrapper==2.0.0 rdflib==7.4.0
       shell: bash
 
-    - name: Run harvest script (with auto-commit+push)
-      run: python ${{ github.action_path }}/harvest.py "${{ inputs.collection-uri }}"
+    - name: Run harvest script
+      run: python ${{ github.action_path }}/harvest.py
+      shell: bash
+
+    - name: Commit & push translations.db if changed
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add translations.db
+        
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+          exit 0
+        fi
+        
+        git commit -m "chore: update translations.db from NERC vocab [ci skip]"
+        git push origin HEAD:${{ github.ref_name }}
       env:
-        # These env vars are injected automatically by Gitea/GitHub
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # Gitea uses the same name!
-        GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}     # fallback
+        GITHUB_TOKEN: ${{ inputs.github-token }}
       shell: bash
