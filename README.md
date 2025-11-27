@@ -1,17 +1,19 @@
 # setup-harvest-action
 
-Harvest NERC vocabulary collections from SPARQL endpoint to SQLite database.
+Harvest NERC vocabulary collections from SPARQL endpoint to SQLite database and commit to repository.
 
 ## Usage
 
 ```yaml
+- uses: actions/checkout@v4
+
 - uses: marine-term-translations/setup-harvest-action@v1
   with:
     # URI of the collection to query (required)
     collection-uri: 'http://vocab.nerc.ac.uk/collection/P01/current/'
 ```
 
-The database is always saved as `translations.db` in the root of the repository.
+The database is saved as `translations.db` in the root of the repository and automatically committed and pushed.
 
 ## Example Workflow
 
@@ -25,28 +27,35 @@ on:
         required: true
         default: 'http://vocab.nerc.ac.uk/collection/P01/current/'
 
+permissions:
+  contents: write
+
 jobs:
   harvest:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: marine-term-translations/setup-harvest-action@v1
         with:
           collection-uri: ${{ github.event.inputs.collection }}
-      
-      - name: Upload database
-        uses: actions/upload-artifact@v4
-        with:
-          name: vocabulary-database
-          path: translations.db
 ```
 
 ## Inputs
 
 - `collection-uri` (required): URI of the NERC vocabulary collection to harvest
+- `commit-message` (optional): Custom commit message for the database update (default: `Update translations.db from NERC vocabulary harvest`)
 
 ## Outputs
 
 - `database-path`: Path to the generated SQLite database (always `translations.db`)
+- `committed`: Whether changes were committed (`true` or `false`)
+
+## Requirements
+
+- The workflow must have `contents: write` permission to push changes
+- Your repository's `.gitignore` should not exclude `translations.db` if you want to track it
+- The `actions/checkout@v4` step must be run before this action with `persist-credentials: true` (this is the default)
 
 ## Database Schema
 
