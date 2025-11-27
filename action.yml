@@ -54,7 +54,10 @@ runs:
             echo "committed=true" >> "$GITHUB_OUTPUT"
             echo "Database committed and pushed to repository"
           else
-            echo "Error: Failed to push changes"
+            echo "Error: Failed to push changes. Please ensure:"
+            echo "  - The workflow has 'contents: write' permission"
+            echo "  - Branch protection rules allow pushes from GitHub Actions"
+            echo "  - actions/checkout was run with persist-credentials: true (default)"
             exit 1
           fi
         fi
