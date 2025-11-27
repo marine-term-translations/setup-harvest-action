@@ -32,8 +32,8 @@ runs:
       id: commit
       shell: bash
       run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
         
         # Check if database file exists
         if [ ! -f "translations.db" ]; then
@@ -50,9 +50,13 @@ runs:
           echo "committed=false" >> "$GITHUB_OUTPUT"
         else
           git commit -m "${{ inputs.commit-message }}"
-          git push
-          echo "committed=true" >> "$GITHUB_OUTPUT"
-          echo "Database committed and pushed to repository"
+          if git push; then
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+            echo "Database committed and pushed to repository"
+          else
+            echo "Error: Failed to push changes"
+            exit 1
+          fi
         fi
 
 branding:

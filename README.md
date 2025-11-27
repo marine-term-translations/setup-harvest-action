@@ -55,7 +55,7 @@ jobs:
 
 - The workflow must have `contents: write` permission to push changes
 - Your repository's `.gitignore` should not exclude `translations.db` if you want to track it
-- The `actions/checkout@v4` step must be run before this action (with default `persist-credentials: true` to enable git push)
+- The `actions/checkout@v4` step must be run before this action with `persist-credentials: true` (this is the default)
 
 ## Database Schema
 
