@@ -421,43 +421,56 @@ def main():
         print(f"Harvest completed successfully!")
         print(f"Database saved to: {output_path}")
 
-        # ——— AUTO-COMMIT & PUSH (only in GitHub Actions) ———
-        import subprocess
-        from pathlib import Path
-        
-        workspace = Path(os.environ["GITHUB_WORKSPACE"])
-        db_file = workspace / "translations.db"
+        # ——— AUTO-COMMIT & PUSH TO CALLING REPO (works on GitHub + Gitea) ———
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            import subprocess
+            import time
 
-        # Safety: ensure we're really in a git repo
-        if not (workspace / ".git").exists():
-            print("Not a git repository – skipping commit")
-        else:
-            print("Committing and pushing updated translations.db ...")
+            token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GITEA_TOKEN")
+            if not token:
+                print("Warning: No token found – cannot push")
+                return
+
+            repo = os.environ["GITHUB_REPOSITORY"]  # e.g. "owner/repo"
+            workspace = os.environ.get("GITHUB_WORKSPACE", ".")
+
+            print(f"Pushing updated translations.db back to {repo}...")
 
             try:
-                # cd into workspace
-                subprocess.run(["git", "config", "--global", "--add", "safe.directory", str(workspace)], check=True)
-                subprocess.run(["git", "config", "user.name", "GitHub Actions"], check=True)
-                subprocess.run(["git", "config", "user.email", "actions@github.com"], check=True)
-
-                # Stage the DB
-                subprocess.run(["git", "add", str(db_file)], check=True)
-
-                # Commit only if there are changes
-                diff = subprocess.run(
-                    ["git", "diff", "--staged", "--quiet"],
-                    capture_output=True
+                subprocess.run(
+                    ["git", "config", "--global", "--add", "safe.directory", workspace],
+                    check=True,
                 )
-                if diff.returncode == 0:
-                    print("No changes detected – nothing to commit")
+                subprocess.run(
+                    ["git", "config", "user.name", "Harvest Bot"], check=True
+                )
+                subprocess.run(
+                    ["git", "config", "user.email", "bot@marine.example"], check=True
+                )
+
+                # Use token auth for push
+                remote_url = f"https://{token}@github.com/{repo}.git"
+                subprocess.run(
+                    ["git", "remote", "set-url", "origin", remote_url], check=True
+                )
+
+                subprocess.run(["git", "add", "translations.db"], check=True)
+
+                changed = subprocess.run(
+                    ["git", "diff", "--staged", "--quiet"], capture_output=True
+                )
+                if changed.returncode == 0:
+                    print("No changes – nothing to push")
                 else:
-                    commit_msg = f"chore: harvest update {time.strftime('%Y-%m-%d %H:%M UTC')}"
-                    subprocess.run(["git", "commit", "-m", commit_msg], check=True)
+                    msg = f"chore: harvest update {time.strftime('%Y-%m-%d %H:%M UTC')}"
+                    subprocess.run(["git", "commit", "-m", msg], check=True)
                     subprocess.run(["git", "push"], check=True)
-                    print(f"Successfully committed and pushed: {commit_msg}")
-            except subprocess.CalledProcessError as e:
-                print(f"Git operation failed: {e}")
-                sys.exit(1)
+                    print(f"Pushed: {msg}")
+            except Exception as e:
+                print(f"Push failed: {e}")
+                import traceback
+
+                traceback.print_exc()
 
     except ValueError as e:
         print(f"Invalid input: {e}")

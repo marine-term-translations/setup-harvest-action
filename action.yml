@@ -1,67 +1,25 @@
-name: 'Harvest NERC Vocab Collection'
-description: 'Query a NERC vocab collection from SPARQL endpoint, save to SQLite database, and commit to repository'
-author: 'marine-term-translations'
-
+name: "Harvest NERC Vocabulary"
+description: "Harvests a NERC collection and auto-commits translations.db back to the calling repo"
 inputs:
   collection-uri:
-    description: 'URI of the collection to query'
     required: true
-  commit-message:
-    description: 'Commit message for the database update'
-    required: false
-    default: 'Update translations.db from NERC vocabulary harvest'
-
-outputs:
-  database-path:
-    description: 'Path to the generated SQLite database (always translations.db in repo root)'
-    value: 'translations.db'
-  committed:
-    description: 'Whether changes were committed (true/false)'
-    value: ${{ steps.commit.outputs.committed }}
-
+    description: "e.g. http://vocab.nerc.ac.uk/collection/P02/current/"
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
-    - name: Build and run harvest container
-      shell: bash
-      run: |
-        docker build -t harvest-action ${{ github.action_path }}
-        docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace harvest-action "${{ inputs.collection-uri }}"
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-    - name: Commit database to repository
-      id: commit
+    - name: Install SPARQLWrapper
+      run: pip install SPARQLWrapper
       shell: bash
-      run: |
-        git config --local user.name "github-actions[bot]"
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        
-        # Check if database file exists
-        if [ ! -f "translations.db" ]; then
-          echo "Error: translations.db was not generated"
-          exit 1
-        fi
-        
-        # Add the database file
-        git add translations.db
-        
-        # Check if there are changes to commit
-        if git diff --cached --quiet; then
-          echo "No changes to commit"
-          echo "committed=false" >> "$GITHUB_OUTPUT"
-        else
-          git commit -m "${{ inputs.commit-message }}"
-          if git push; then
-            echo "committed=true" >> "$GITHUB_OUTPUT"
-            echo "Database committed and pushed to repository"
-          else
-            echo "Error: Failed to push changes. Please ensure:"
-            echo "  - The workflow has 'contents: write' permission"
-            echo "  - Branch protection rules allow pushes from GitHub Actions"
-            echo "  - actions/checkout was run with persist-credentials: true (default)"
-            exit 1
-          fi
-        fi
 
-branding:
-  icon: 'database'
-  color: 'blue'
+    - name: Run harvest script (with auto-commit+push)
+      run: python ${{ github.action_path }}/harvest.py "${{ inputs.collection-uri }}"
+      env:
+        # These env vars are injected automatically by Gitea/GitHub
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # Gitea uses the same name!
+        GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}     # fallback
+      shell: bash
