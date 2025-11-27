@@ -1,22 +1,63 @@
 name: 'Harvest NERC Vocab Collection'
-description: 'Query a NERC vocab collection from SPARQL endpoint and save to SQLite database'
+description: 'Query a NERC vocab collection from SPARQL endpoint, save to SQLite database, and commit to repository'
 author: 'marine-term-translations'
 
 inputs:
   collection-uri:
     description: 'URI of the collection to query'
     required: true
+  commit-message:
+    description: 'Commit message for the database update'
+    required: false
+    default: 'Update translations.db from NERC vocabulary harvest'
+  github-token:
+    description: 'GitHub token for pushing changes (defaults to GITHUB_TOKEN)'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   database-path:
     description: 'Path to the generated SQLite database (always translations.db in repo root)'
     value: 'translations.db'
+  committed:
+    description: 'Whether changes were committed (true/false)'
+    value: ${{ steps.commit.outputs.committed }}
 
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - ${{ inputs.collection-uri }}
+  using: 'composite'
+  steps:
+    - name: Build and run harvest container
+      shell: bash
+      run: |
+        docker build -t harvest-action ${{ github.action_path }}
+        docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace harvest-action "${{ inputs.collection-uri }}"
+
+    - name: Commit database to repository
+      id: commit
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Check if database file exists
+        if [ ! -f "translations.db" ]; then
+          echo "Error: translations.db was not generated"
+          exit 1
+        fi
+        
+        # Add the database file
+        git add translations.db
+        
+        # Check if there are changes to commit
+        if git diff --cached --quiet; then
+          echo "No changes to commit"
+          echo "committed=false" >> "$GITHUB_OUTPUT"
+        else
+          git commit -m "${{ inputs.commit-message }}"
+          git push
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+          echo "Database committed and pushed to repository"
+        fi
 
 branding:
   icon: 'database'
