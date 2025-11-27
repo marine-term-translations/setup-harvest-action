@@ -421,20 +421,21 @@ def main():
         print(f"Harvest completed successfully!")
         print(f"Database saved to: {output_path}")
 
-        # ——— AUTO-COMMIT & PUSH TO CALLING REPO (works on GitHub + Gitea) ———
+        # ——— AUTO-COMMIT & PUSH — Works in composite actions (GitHub + Gitea) ———
         if os.environ.get("GITHUB_ACTIONS") == "true":
             import subprocess
             import time
 
             token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GITEA_TOKEN")
             if not token:
-                print("Warning: No token found – cannot push")
+                print("No token found — skipping push")
                 return
 
-            repo = os.environ["GITHUB_REPOSITORY"]  # e.g. "owner/repo"
+            # Safe fallback: GITHUB_WORKSPACE is always set in composite actions
             workspace = os.environ.get("GITHUB_WORKSPACE", ".")
+            repo = os.environ["GITHUB_REPOSITORY"]
 
-            print(f"Pushing updated translations.db back to {repo}...")
+            print(f"Committing and pushing to {repo}...")
 
             try:
                 subprocess.run(
@@ -448,24 +449,22 @@ def main():
                     ["git", "config", "user.email", "bot@marine.example"], check=True
                 )
 
-                # Use token auth for push
                 remote_url = f"https://{token}@github.com/{repo}.git"
                 subprocess.run(
                     ["git", "remote", "set-url", "origin", remote_url], check=True
                 )
 
                 subprocess.run(["git", "add", "translations.db"], check=True)
-
-                changed = subprocess.run(
-                    ["git", "diff", "--staged", "--quiet"], capture_output=True
-                )
-                if changed.returncode == 0:
-                    print("No changes – nothing to push")
-                else:
+                if (
+                    subprocess.run(["git", "diff", "--staged", "--quiet"]).returncode
+                    != 0
+                ):
                     msg = f"chore: harvest update {time.strftime('%Y-%m-%d %H:%M UTC')}"
                     subprocess.run(["git", "commit", "-m", msg], check=True)
                     subprocess.run(["git", "push"], check=True)
                     print(f"Pushed: {msg}")
+                else:
+                    print("No changes")
             except Exception as e:
                 print(f"Push failed: {e}")
                 import traceback
