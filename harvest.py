@@ -71,16 +71,12 @@ def create_sparql_query(collection_uri, limit=None, offset=None):
     PREFIX dc: <http://purl.org/dc/terms/>
     PREFIX owl: <http://www.w3.org/2002/07/owl#>
     
-    SELECT DISTINCT ?concept ?prefLabel ?altLabel ?definition ?notation ?broader ?narrower ?related
+    SELECT DISTINCT ?concept ?prefLabel ?altLabel ?definition 
     WHERE {{
         <{collection_uri}> skos:member ?concept .
         OPTIONAL {{ ?concept skos:prefLabel ?prefLabel }}
         OPTIONAL {{ ?concept skos:altLabel ?altLabel }}
         OPTIONAL {{ ?concept skos:definition ?definition }}
-        OPTIONAL {{ ?concept skos:notation ?notation }}
-        OPTIONAL {{ ?concept skos:broader ?broader }}
-        OPTIONAL {{ ?concept skos:narrower ?narrower }}
-        OPTIONAL {{ ?concept skos:related ?related }}
     }}
     ORDER BY ?concept
     """
